@@ -114,8 +114,15 @@ Step 5 — Add CLAHE local contrast enhancement
 ---------------------------------------------
 
 CLAHE (Contrast Limited Adaptive Histogram Equalization) boosts *local* contrast,
-which can make the grey-matter boundary easier to threshold, especially where
-staining is uneven across the section.
+which can make the grey-matter boundary easier to threshold — especially where
+the staining is darker on one side of the section than the other.
+
+**Why "local" matters.** Ordinary contrast stretching looks at the whole image at
+once, so if one corner is faded it gets treated the same as a dark corner. CLAHE
+instead divides the image into a grid of small tiles and enhances the contrast
+*within each tile separately*, then blends the tiles smoothly. That's what lets
+it rescue detail in a patchy, unevenly-stained section — each region gets its own
+treatment.
 
 **Task:** apply CLAHE to the raw image before you threshold it.
 
@@ -124,10 +131,75 @@ staining is uneven across the section.
 - It returns a float image scaled 0–1, so multiply by 255 if the rest of your
   code expects 0–255 values:
 
-      enhanced = equalize_adapthist(raw, clip_limit=0.01) * 255.0
+      enhanced = equalize_adapthist(raw, clip_limit=0.01, kernel_size=64) * 255.0
 
-- `clip_limit` controls how aggressive it is. Try a few values (e.g. 0.005,
-  0.01, 0.02) and see how the segmentation changes.
+### The two parameters you'll experiment with
+
+CLAHE's behaviour is controlled mainly by two arguments, and this step is about
+building intuition for what they do by trying them yourself.
+
+**`kernel_size`** — the size (in pixels) of those local tiles.
+- *Small* kernel → contrast is computed over a tiny neighbourhood. This picks up
+  very fine local detail, but it also amplifies noise and can start "inventing"
+  texture inside regions that should be uniform. Push it too small and the white
+  matter fills with speckle.
+- *Large* kernel → contrast is computed over a big neighbourhood, closer to
+  whole-image equalization. Smoother result, less noise, but it stops
+  compensating for uneven staining — the very thing you wanted CLAHE for.
+- A useful rule of thumb: the kernel should be **noticeably larger than the
+  cortical ribbon is thick**, so that each tile contains both grey matter and its
+  neighbouring tissue to build contrast against. If the kernel is smaller than
+  the ribbon, CLAHE can flatten the very GM/white-matter difference you're trying
+  to enhance.
+
+**`clip_limit`** — how aggressively contrast is boosted (roughly 0–1; small
+values like 0.01 are typical).
+- *Higher* clip limit → stronger contrast enhancement. Makes faint boundaries pop,
+  but also amplifies noise and can push mid-grey pixels to extremes, changing
+  which side of the Otsu threshold they land on.
+- *Lower* clip limit → gentler enhancement, closer to the original image. Safer,
+  but may not do enough to help a badly-stained section.
+
+### Experiment: which settings actually give the best segmentation?
+
+Don't just pick values and move on — **measure** which ones help, using the Dice
+score you're already computing. That's the whole point of having manual labels:
+they let you decide objectively instead of by eye.
+
+**Task:** run your segmentation on a few annotated sections with several
+combinations of `kernel_size` and `clip_limit`, and see which combination gives
+the highest Dice against the manual labels.
+
+**Hints:**
+- Pick two or three sections you've annotated, spanning different species/stains
+  if you can — a setting that's best for one section isn't automatically best for
+  another.
+- Loop over a small grid of values and record the Dice for each. For example:
+
+      for kernel_size in [32, 64, 128]:
+          for clip_limit in [0.005, 0.01, 0.02, 0.05]:
+              cortex = segment_cortex(raw, stain,
+                                      kernel_size=kernel_size,
+                                      clip_limit=clip_limit)
+              d = dice_score(cortex, manual_mask)
+              print(kernel_size, clip_limit, round(d, 3))
+
+  (You'll need to add `kernel_size` and `clip_limit` as arguments to your
+  segmentation function so you can pass different values in.)
+- Look at the table of results. Is there a clear best setting? Does it agree
+  across your different test sections, or does each section prefer something
+  different?
+- Also **look at the images**, not just the numbers. For your best and worst
+  settings, display the CLAHE-enhanced image and the resulting cortex mask side
+  by side. Can you see *why* a setting scored badly — too much speckle (kernel
+  too small / clip too high), or washed-out boundaries (kernel too large / clip
+  too low)?
+
+**Think about:** if different sections prefer different settings, what does that
+tell you about using a single fixed value for the whole dataset? Is there a
+setting that's *reliably decent* everywhere, even if it's not the single best for
+any one section? (That's often more useful than a setting that's excellent on one
+section and poor on others.)
 
 
 Step 6 — Loop over every file and collect results
@@ -195,8 +267,9 @@ If you finish early
 1. **Nissl vs myelin.** Group your results by `stain` instead of species. Does
    the automatic method do better on one stain type than the other? Why might
    that be?
-2. **CLAHE on/off.** Run the whole thing with and without the CLAHE step. Does it
-   actually improve the average Dice, or only on some species?
+2. **CLAHE on/off.** Run the whole thing with CLAHE removed entirely, and
+   compare the average Dice to your best CLAHE settings from Step 5. Does the
+   enhancement help overall, or only for certain species/stains?
 3. **The ambiguous stems.** Go back to the duplicate-basename problem from Step 3
    and make your script pick the correct row using the folder name. Confirm it
    now assigns the right stain to those files.
