@@ -1,6 +1,6 @@
-from yara import validate_segmentation
-from bella import segment
-from ava import job3
+from code.yara import validate_segmentation
+from code.bella import segment
+from code.ava import job3
 
 import pandas as pd
 
