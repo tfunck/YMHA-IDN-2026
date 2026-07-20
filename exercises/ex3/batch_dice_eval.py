@@ -35,34 +35,23 @@ from skimage.exposure import equalize_adapthist
 # ---------------------------------------------------------------------------
 def read_annotation(tif_path):
     with tifffile.TiffFile(tif_path) as tf:
-        raw_layer = tf.pages[0].asarray()
-        seg_layer = tf.pages[1].asarray()
+        seg_layer = tf.pages[0].asarray()
+        raw_layer = tf.pages[1].asarray()
     return seg_layer, raw_layer
 
-    if raw_layer.ndim == 3:
-        raw_layer = raw_layer[..., :3].mean(axis=2)
 
-    if raw_layer.ndim == 3:
-        raw_layer = raw_layer[..., :3].mean(axis=2)
-    return seg_layer, raw_layer
-
-# -------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # The segmentation pipeline (matches the earlier exercise, plus CLAHE).
 # `stain` controls grey-matter polarity: in Nissl GM is dark, in myelin GM is
 # bright. We flip so GM is always the darker class, then keep below Otsu.
 # ---------------------------------------------------------------------------
-
-
-def segment_cortex(raw, stain, kernel_size=64, clip_limit=0.01):
+def segment_cortex(raw, stain):
     raw = raw.astype(np.uint8)
 
     # CLAHE local contrast enhancement. equalize_adapthist returns a float image
     # in [0, 1]; rescale to 0-255 for consistency with the thresholding below.
-    enhanced = equalize_adapthist(
-        raw,
-        clip_limit=clip_limit,
-        kernel_size=kernel_size
-    ) * 255.0
+    enhanced = equalize_adapthist(raw, clip_limit=0.01) * 255.0
+
     # Flip so that grey matter is the DARK class regardless of stain type.
     # Nissl: GM already dark -> flip makes GM bright, so DON'T flip for Nissl?
     # We standardise on "GM = dark after this step":
@@ -78,8 +67,7 @@ def segment_cortex(raw, stain, kernel_size=64, clip_limit=0.01):
     values, counts = np.unique(raw, return_counts=True)
     background_value = values[np.argmax(counts)]
     # tissue is darker than background in the original image
-    foreground_threshold = max(0, int(background_value)-10)
-    foreground = raw < foreground_threshold
+    foreground = raw < (background_value - 10)
 
     # Keep the two largest connected components (the hemispheres).
     labels, n = ndi.label(foreground)
@@ -111,7 +99,6 @@ def dice_score(pred, truth):
 # A stem can map to MORE THAN ONE row (the same basename exists in both the
 # nissl and myelin folders for some specimens), so we keep a list and try to
 # disambiguate by a stain hint in the annotation's folder path.
-# STEP 3
 # ---------------------------------------------------------------------------
 def build_lookup(csv_path):
     df = pd.read_csv(csv_path)
@@ -153,7 +140,7 @@ def main(argv):
     df, lookup = build_lookup(csv_path)
 
     # 1) find every *_manual.tif under the directory (recursively)
-    pattern = os.path.join(annotation_dir, "**", "*_manual.tif*")
+    pattern = os.path.join(annotation_dir, "**", "*_manual.tif")
     files = sorted(glob.glob(pattern, recursive=True))
     print(f"Found {len(files)} *_manual.tif file(s) under {annotation_dir}\n")
 
@@ -162,8 +149,7 @@ def main(argv):
         stem = os.path.basename(path)[:-len("_manual.tif")]
         candidates = lookup.get(stem)
         if not candidates:
-            print(
-                f"  no CSV match for stem {stem!r} ({os.path.basename(path)})")
+            print(f"  no CSV match for stem {stem!r} ({os.path.basename(path)})")
             records.append(dict(stem=stem, species=None, stain=None,
                                 dice=np.nan, note="no CSV match"))
             continue
