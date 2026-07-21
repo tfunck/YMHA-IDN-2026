@@ -1,3 +1,8 @@
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import tifffile
+
 def validate(manual_rows, data_dir="."):
     """Segment every manually labelled section and return Dice results."""
     results = []
