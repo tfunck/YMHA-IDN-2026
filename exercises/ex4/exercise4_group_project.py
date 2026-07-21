@@ -217,8 +217,31 @@ handle that stain). The whole point of having manual labels is to catch problems
 here, before you generate a thousand segmentations you can't check.
 
 
-Job 3 — Apply to the remaining sections and save
-------------------------------------------------
+#Job 3 — Apply to the remaining sections and save
+#------------------------------------------------
+import pandas as pd
+import tifffile, numpy as np
+
+df = pd.read_csv('sect_info_with_manual.csv')
+
+tmpsegment = df[df["manual"].isna()]
+auto_segments = tmpsegment [['filename','stain']]
+print (auto_segments)
+def write_annotation(path, seg_mask, raw):
+    seg = (seg_mask > 0).astype(np.uint8) * 255      # 0/255
+    tifffile.imwrite(path, np.stack([seg, raw.astype(np.uint8)]))
+    
+# def segment_section(raw, stain, kernel_size=64, clip_limit=0.01):
+for auto_seg in auto_segments.itertuples():
+    mask = segment_section(auto_seg.filename, auto_seg.stain)
+    outpath = auto_seg.filename.replace('.jpg','.tif')
+    write_annotation(outpath,mask,auto_seg.filename)
+ 
+
+#haven't tested because there are no changes to part two
+
+    
+
 
 **Task:** for every row that does NOT have a manual label, run `segment_section`
 and save the result as a two-layer TIFF in the same format as the `_manual`
@@ -227,8 +250,8 @@ files.
 **Hints:**
 - Filter to the rows still needing segmentation:
 
-      need_seg = df[df["manual"].isna()]
-
+    need_seg = df[df["manual"].
+                  
 - The output format must match the manual files: a TIFF with **two layers** —
   page 0 = the segmentation, page 1 = the raw image. Write a `write_annotation`
   function so every output is saved the same way:
