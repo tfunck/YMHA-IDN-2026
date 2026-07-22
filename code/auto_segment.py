@@ -1,6 +1,6 @@
 import pandas as pd
 import tifffile, numpy as np
-from segment_section.py import segment_section
+from segment_section import segment_section
 
 def write_annotation(path, seg_mask, raw):
     seg = (seg_mask > 0).astype(np.uint8) * 255      # 0/255
