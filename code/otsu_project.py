@@ -1,3 +1,3 @@
-from segment_section.py import segment_section
-from validate.py import validate
-from auto_segment.py import auto_section, write_annotation
+from segment_section import segment_section
+from validate import validate
+from auto_segment import auto_section, write_annotation
