@@ -26,11 +26,12 @@ def auto_section(csvfile='sect_info_with_manual.csv'):
     auto_segments = tmpsegment[['filename', 'stain']]
     # print (auto_segments)
     for auto_seg in auto_segments.itertuples():
-        print("Processing:", auto_seg.filename)
-        raw = imread(auto_seg.filename) 
+        fname = '../../'+auto_seg.filename
+        print("Processing:", fname)
+        raw = imread(fname) 
         #read the original image so segment_section can process it
         mask = segment_section(raw, auto_seg.stain)
         #generate the cortex mask form the give image
-        outpath = auto_seg.filename.replace('.jpg', '.tif')
+        outpath = fname.replace('.jpg', '.tif')
         write_annotation(outpath, mask, raw)
         #save segmentation mask and original image into the TIFF annotation
